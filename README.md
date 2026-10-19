@@ -79,11 +79,12 @@ print(ok, status, body)
 | Environment | Mechanism | Style |
 |---|---|---|
 | **FiveM** | `PerformHttpRequest` | asynchronous, callback |
-| **Garry's Mod** | `http.Post` | asynchronous, callback |
+| **Garry's Mod** | `HTTP` | asynchronous, callback |
 | **Plain Lua** | `luasocket` | synchronous, also returns values |
 | None available | raises an error | — |
 
-Callbacks receive `(ok, status, body)`. Under luasocket those same three values are also
+Callbacks receive `(ok, status, body)`; `ok` is true only when the API answers 2xx (a valid
+licence), and `body` is the JSON answer, whose `code` says why a key was rejected. Under luasocket those same three values are also
 returned directly, so both styles work.
 
 ## API
@@ -119,6 +120,14 @@ Also available for **Java**, **.NET**, **JavaScript**, **Python** and **PHP**.
 - Website — https://sunlicense.com
 - Documentation — https://docs.sunlicense.hapangama.com
 - Issues — https://github.com/sunlicense-com/sunlicense-lua/issues
+
+## Changelog
+
+- **0.0.2**: validates against `/api/v2/license/validate` (`{"license": key, ...context}`), like
+  every other SunLicense client. **0.0.1 called `/api/v1/validate`, which answers HTTP 200 for every
+  key, so unknown, revoked and expired keys were reported as valid.** On Garry's Mod 0.0.1 also
+  sent no API key and always reported `(true, 200)`. Upgrade: replace `sunlicense.lua`.
+- **0.0.1**: first release.
 
 ## Licence
 

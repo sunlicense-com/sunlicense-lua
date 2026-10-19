@@ -6,7 +6,7 @@
 -- environment and uses whichever HTTP mechanism is available:
 --
 --   * FiveM        -- PerformHttpRequest (async, callback)
---   * Garry's Mod  -- http.Post / HTTP (async, callback)
+--   * Garry's Mod  -- HTTP (async, callback)
 --   * Plain Lua    -- luasocket (synchronous), if installed
 --
 -- Docs: https://docs.sunlicense.hapangama.com
@@ -16,7 +16,7 @@ local SunLicense = {}
 SunLicense.__index = SunLicense
 
 --- The version of this client.
-SunLicense.VERSION = "0.0.1"
+SunLicense.VERSION = "0.0.2"
 
 -- ---------------------------------------------------------------------------
 -- Environment detection
@@ -28,7 +28,7 @@ function SunLicense.environment()
   if type(_G.PerformHttpRequest) == "function" then
     return "fivem"
   end
-  if type(_G.http) == "table" and type(_G.http.Post) == "function" then
+  if type(_G.HTTP) == "function" then
     return "gmod"
   end
   local ok = pcall(require, "socket.http")
@@ -131,12 +131,14 @@ function SunLicense:validate(licenseKey, context, callback)
     context = nil
   end
 
-  local payload = { licenseKey = licenseKey }
+  local payload = { license = licenseKey }
   for key, value in pairs(context or {}) do
     payload[key] = value
   end
 
-  local url = self.baseUrl .. "/api/v1/validate"
+  -- The endpoint every SunLicense SDK uses: 2xx means valid, 4xx means rejected (0.0.1 called
+  -- /api/v1/validate, which answers 200 for every key, so every key passed).
+  local url = self.baseUrl .. "/api/v2/license/validate"
   local body = encode(payload)
   local env = SunLicense.environment()
 
@@ -150,11 +152,23 @@ function SunLicense:validate(licenseKey, context, callback)
   end
 
   if env == "gmod" then
-    _G.http.Post(url, { json = body }, function(responseBody)
-      if callback then callback(true, 200, responseBody) end
-    end, function(err)
-      if callback then callback(false, 0, err) end
-    end)
+    -- HTTP{} rather than http.Post, which sends form fields instead of JSON. 0.0.1 used http.Post
+    -- without the API key and reported every answer as (true, 200).
+    local headers = self:headers()
+    headers["Content-Type"] = nil
+    _G.HTTP({
+      url = url,
+      method = "POST",
+      headers = headers,
+      body = body,
+      type = "application/json",
+      success = function(status, responseBody)
+        if callback then callback(status >= 200 and status < 300, status, responseBody) end
+      end,
+      failed = function(err)
+        if callback then callback(false, 0, err) end
+      end,
+    })
     return
   end
 
