@@ -382,16 +382,25 @@ test("features: counted, sent, kept until stored; nothing counted while off", fu
   assert(next(off.features) == nil, "nothing counted while off")
 end)
 
-test("features: at most 50 per report, the rest wait", function()
+test("features: at most 50 different ones, like the Java SDK; switching off drops the counts", function()
   local post, seen = recorder()
   local a = make({ productAnalyticsId = "pa_x", _post = post })
   for i = 1, 60 do a:feature("f" .. i) end
+  a:feature("f1")
   a:sendNow()
   a:sendNow()
-  local n1, n2 = 0, 0
+  local n1 = 0
   for _ in pairs(seen[1].body.features) do n1 = n1 + 1 end
-  for _ in pairs(seen[2].body.features) do n2 = n2 + 1 end
-  assert(n1 == 50 and n2 == 10, n1 .. " " .. n2)
+  assert(n1 == 50 and seen[1].body.features.f1 == 2, "50 features, f1 twice")
+  assert(seen[2].body.features == nil, "the other 10 were never counted")
+  local on = true
+  local b = make({ productAnalyticsId = "pa_x", _post = post, enabled = function() return on end })
+  b:feature("auto-sell")
+  on = false
+  assert(b:sendNow() == 0)
+  on = true
+  b:sendNow()
+  assert(seen[3].body.features == nil, "counts dropped while off")
 end)
 
 test("custom charts: every type, the wire shape of spec 185 section 4.6", function()
@@ -421,7 +430,7 @@ test("custom charts: every type, the wire shape of spec 185 section 4.6", functi
     { id = "players", type = "single_line", data = { value = 42 } },
     { id = "worlds", type = "multi_line", data = { values = { overworld = 30, nether = -2 } } },
     { id = "commands", type = "simple_bar", data = { values = { sell = 12 } } },
-    { id = "tiers", type = "advanced_bar", data = { values = { gold = { 1, 2, 3 } } } },
+    { id = "tiers", type = "advanced_bar", data = { values = { gold = { 1, 2, 3 }, bad = { 1 } } } },
   }, "charts")
 end)
 
@@ -443,8 +452,9 @@ test("custom charts: same id replaces, at most 30, and a report over 16 KB keeps
   end
   big:feature("kept")
   assert(big:sendNow() == 204)
-  assert(seen[2].body.charts == nil and seen[2].body.features == nil and seen[2].body.metrics, "stripped")
-  assert(big.features.kept == 1, "features not sent stay counted")
+  assert(seen[2].body.charts == nil and seen[2].body.metrics, "charts dropped first")
+  same(seen[2].body.features, { kept = 1 }, "features")
+  assert(big.features.kept == nil, "sent features are gone")
 end)
 
 test("nothing personal in a real report from this machine", function()

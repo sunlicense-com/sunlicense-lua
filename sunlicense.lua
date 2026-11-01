@@ -539,6 +539,7 @@ end
 function Analytics:send(done)
   if self.closed then return done(0) end
   if not self:isEnabled() then
+    self.features, self.featureOrder = {}, {} -- nothing is counted while it's off
     self:log("off", "analytics is switched off; nothing sent")
     return done(0)
   end
@@ -548,6 +549,10 @@ function Analytics:send(done)
     return done(0)
   end
   local body = json(report)
+  if #body > MAX_BODY and report.charts then -- charts go first, then features
+    report.charts = nil
+    body = json(report)
+  end
   if #body > MAX_BODY then
     for k in pairs(report) do if not CORE_KEYS[k] then report[k] = nil end end
     sending = nil
@@ -696,8 +701,11 @@ function Analytics:feature(name, uses)
   pcall(function()
     uses = uses == nil and 1 or uses
     local id = chartId(name)
-    if not id or not isInteger(uses) or uses < 1 or not self:isEnabled() then return end
+    if not id or not isInteger(uses) or uses < 1 or self.closed or not self:isEnabled() then return end
     if not self.features[id] then
+      local count = 0
+      for _ in pairs(self.features) do count = count + 1 end
+      if count >= MAX_FEATURES then return end -- at most 50 different features
       local known = false
       for _, n in ipairs(self.featureOrder) do if n == id then known = true break end end
       if not known then self.featureOrder[#self.featureOrder + 1] = id end
@@ -787,14 +795,14 @@ function Analytics.chartData(kind, v)
   elseif kind == "advanced_bar" and type(v) == "table" then
     local out, n = {}, 0
     for k, list in pairs(v) do
-      local key, nums, fine = clean(k, 64), array({}), type(list) == "table" and #list > 0
-      if fine then
+      local key, nums = clean(k, 64), array({})
+      if type(list) == "table" then
         for i = 1, math.min(#list, MAX_BAR) do
-          if not number(list[i]) then fine = false break end
+          if not number(list[i]) then break end -- up to 20 numbers, until the first that isn't one
           nums[i] = list[i]
         end
       end
-      if key and fine and n < MAX_VALUES then out[key], n = nums, n + 1 end
+      if key and #nums > 0 and n < MAX_VALUES then out[key], n = nums, n + 1 end
     end
     return n > 0 and { values = out } or nil
   end
