@@ -147,6 +147,44 @@ its own errors.
 
 Docs: https://docs.sunlicense.com/guide/sdks#built-in-analytics
 
+## Protection: core unlock, tamper reports, ownership notice
+
+`sunlicense seal <file> --product <code> [--digest <files>]` (the [CLI](https://docs.sunlicense.com/cli/)) encrypts
+part of your product, its *core*, on SunLicense's servers under a key only they hold, and prints the sealed text
+(`SLS1.…`) you ship. A valid license check answers with that key (`unlock`); a refused one (suspended, expired,
+revoked) doesn't, and this SDK forgets the one it had. So a copy whose license check was cut out can't run its core.
+The unlock from the last valid check is cached for 7 days (in the resource on FiveM, `data/` on Garry's Mod, `cacheDirectory` in plain Lua), encrypted under a key bound to the license key,
+the machine id and this machine, so outages don't stop your customers.
+
+```lua
+local client = SunLicense.new({ baseUrl = "https://api.sunlicense.com", token = apiKey })
+local protection = client:protection({ licenseKey = key, fingerprint = serverId,
+  product = "My Script", owner = "Example Studio", terms = "https://example.com/terms" })
+print(protection:notice())                      -- product, owner, masked key
+client:validate(key, { fingerprint = serverId }, function(ok)
+  local core, err = protection:unseal(LoadResourceFile(GetCurrentResourceName(), "core.sealed"))
+  if core then load(core, "@core")() else print(err) end
+  protection:integrity()                        -- "OK" / "MODIFIED", sent with the next check
+end)
+```
+
+The [FiveM template](https://github.com/sunlicense-com/example-fivem-resource) does all of this, sealing at build time.
+
+- `unseal(sealed)`: the core, or `nil` and the reason without a valid unlock (or for data sealed for another product).
+- `integrity(...)`: compares the files whose digests were sealed with the core (`--digest`) with what is running;
+  `OK` or `MODIFIED` (with the changed files) is sent with the next check, where Sentinel sees it.
+- `notice()`: `My Bot is licensed software by Example Studio. License AX8P-XXXX-XXXX-XXXX. Terms: …`; never the full
+  key or the buyer's name.
+- `protection:protectedFile(name, callback)`: a file uploaded to the product (Standard plan), sent only while the license is valid.
+- `accept(body)` and `protection:validateFields()`: for your own HTTP code; the client does both when you create the protection from it.
+- Pure Lua: SHA-256 and AES-256-GCM run on Lua 5.3/5.4 (FiveM), LuaJIT (Garry's Mod), 5.2 and 5.1. There's no
+  offline license file in Lua (no Ed25519 built in).
+
+Honest limit: someone with a valid license can still extract the unlock and patch their copy; that copy then fails
+its integrity check and is reported. Protection raises the cost and makes leaks visible. Wire format and test
+vectors: `test/fixtures/protection-test-vectors.json` (a copy of SunLicense's); docs:
+https://docs.sunlicense.com/guide/protection
+
 ## Requirements
 
 **Lua 5.1 or newer**, including LuaJIT. No hard dependencies — luasocket is only needed
@@ -164,6 +202,7 @@ Also available for **Java**, **.NET**, **JavaScript**, **Python** and **PHP**.
 
 ## Changelog
 
+- **0.2.0**: core unlock, tamper reports, the ownership notice and protected files: `client:protection()`.
 - **0.1.0**: built-in product analytics (opt-out), feature usage and custom charts: `client:analytics()`, `SunLicense.analytics()`.
 - **0.0.2**: validates against `/api/v2/license/validate` (`{"license": key, ...context}`), like
   every other SunLicense client. **0.0.1 called `/api/v1/validate`, which answers HTTP 200 for every
@@ -176,6 +215,7 @@ Also available for **Java**, **.NET**, **JavaScript**, **Python** and **PHP**.
 ```bash
 lua test/test_sunlicense.lua
 lua test/test_analytics.lua
+lua test/test_protection.lua
 ```
 
 ## Licence

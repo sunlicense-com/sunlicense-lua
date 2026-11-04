@@ -16,7 +16,7 @@ local SunLicense = {}
 SunLicense.__index = SunLicense
 
 --- The version of this client.
-SunLicense.VERSION = "0.1.0"
+SunLicense.VERSION = "0.2.0"
 
 -- ---------------------------------------------------------------------------
 -- Environment detection
