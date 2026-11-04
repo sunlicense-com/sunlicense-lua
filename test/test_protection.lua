@@ -245,7 +245,7 @@ test("protected files: API key, license and machine headers; refusals say why", 
   local data, err, code = p:protectedFile("rules.dat")
   assert(data == "RULES" and err == nil and code == 200)
   assert(seen.url == "https://api.example.test/api/v2/protected-files/my%20script/rules.dat", seen.url)
-  assert(seen.headers.Authorization == "Bearer sk_test" and seen.headers.license == KEY and seen.headers.fingerprint == "machine-1")
+  assert(seen.headers.Authorization == "Bearer sk_test" and seen.headers["X-License-Key"] == KEY and seen.headers["X-Fingerprint"] == "machine-1")
   status, body = 403, '{"code":"SUSPENDED"}'
   local got
   data, err, code = p:protectedFile("rules.dat", function(...) got = { ... } end)

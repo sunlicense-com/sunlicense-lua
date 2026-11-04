@@ -1689,9 +1689,9 @@ function Protection:protectedFile(name, callback)
   if not self.productCode then return finish(nil, "set productCode to download protected files", 0) end
   if not self.licenseKey then return finish(nil, "no license key", 401) end
   local url = self.baseUrl .. "/api/v2/protected-files/" .. segment(self.productCode) .. "/" .. segment(name)
-  local headers = { ["User-Agent"] = "sunlicense-lua/" .. SunLicense.VERSION, ["license"] = self.licenseKey }
+  local headers = { ["User-Agent"] = "sunlicense-lua/" .. SunLicense.VERSION, ["X-License-Key"] = self.licenseKey }
   if self.apiKey then headers["Authorization"] = "Bearer " .. self.apiKey end
-  if self.fingerprint then headers["fingerprint"] = self.fingerprint end
+  if self.fingerprint then headers["X-Fingerprint"] = self.fingerprint end
   local result
   local function answer(status, body)
     status = tonumber(status) or 0
